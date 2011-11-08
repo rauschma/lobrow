@@ -12,7 +12,7 @@
 var lobrow = function() {
     // A function whose name starts with an underscore is exported for unit tests only
     var e = {};
-    
+
     //----------------- Internal constants
         
     /**
@@ -25,13 +25,26 @@ var lobrow = function() {
 
     //----------------- Public interface
 
-    /** body: function (m1, m2, ...) */
-    e.main = function (importNames, body) {
-        // "" means: the current file (which is the context for all loading)
-        loadModules(normalizeImportNames(e._START_FILE, importNames), function (modules) {
-            body.apply(null, modules);
+    /**
+     * @param body is optional – has the signature function(module1, module2, ...)
+     */
+    e.require = function (importNames, body) {
+        loadModules(resolveImportNames(e._START_FILE, importNames), function (modules) {
+            if (body) {
+                body.apply(null, modules);
+            }
         });
-    }
+    };
+    /**
+     * @param body has the signature function(require, exports, module)
+     */
+    e.module = function (body) {
+        var bodySource = body.toString();
+        if (!startsWith(bodySource, "function")) {
+            throw new Error("Could not access the source of the body: "+bodySource);
+        }
+        runEvaluatedModule(e._START_FILE, body, bodySource);
+    };
 
     //----------------- Loading
 
@@ -39,62 +52,94 @@ var lobrow = function() {
     var currentlyLoading = {};
     
     /**
-     * @param callback has the signature function(moduleArray)
+     * @param callback optional – has the signature function(moduleArray)
      * @return an array with the values of the modules named in `normalizedNames`
      */
     function loadModules(normalizedNames, callback) {
         if (normalizedNames.length === 0) {
             // Nothing to load, call back immediately
-            callback([]);
+            if (callback) {
+                callback([]);
+            }
+            return;
         }
         var moduleCount = 0;
         var modules = [];
         normalizedNames.forEach(function (normalizedName, i) {
-            if (moduleCache.hasOwnProperty(normalizedName)) {
-                storeModule(i, normalizedName, moduleCache[normalizedName]);
-            } else {
-                loadRemotely(i, normalizedName);
-            }
-        });
-        function loadRemotely(index, normalizedName) {
-            if (currentlyLoading[normalizedName]) {
-                throw new Error("Cycle: module '"+normalizedName+"' is already loading");
-            }
-            currentlyLoading[normalizedName] = true;
-            var req = new XMLHttpRequest();
-            req.open('GET', normalizedName+".js", true);
-            // In Firefox, a JavaScript MIME type means that the script is immediately eval-ed
-            req.overrideMimeType("text/plain");
-            req.onreadystatechange = function(event) {
-                if (req.readyState === 4 /* complete */) {
-                    evaluateModule(normalizedName, req.responseText, function (result) {
-                        delete currentlyLoading[normalizedName];
-                        moduleCache[normalizedName] = result;
-                        storeModule(index, result);
-                    });
+            // The callbacks can be called in any order (fork-join-style)!
+            loadModule(normalizedName, function (value) {
+                modules[i] = value;
+                moduleCount++;
+                if (moduleCount >= normalizedNames.length && callback) {
+                    callback(modules);
                 }
-            }
-            req.send();
-        }
-        function storeModule(index, value) {
-            modules[index] = value;
-            moduleCount++;
-            if (moduleCount >= normalizedNames.length) {
-                callback(modules);
-            }
-        }
+            });
+        });
     }
     
-    function evaluateModule(normalizedModuleName, source, callback) {
-        var importNames = e._extractImportNames(source);
-        // Wrap a function around the bare body, so that we can invoke it
-        // Parens are necessary, so it won't be mistaken for a statement
-        var moduleBody = eval("(function (require,exports,module) {"+source+"})");
-        var normalizedNames = normalizeImportNames(normalizedModuleName, importNames);
+    /**
+     * @param callback mandatory
+     */
+    function loadModule(normalizedName, callback) {
+        if (moduleCache.hasOwnProperty(normalizedName)) {
+            callback(moduleCache[normalizedName]);
+            return;
+        }
+        
+        if (currentlyLoading[normalizedName]) {
+            throw new Error("Cycle: module '"+normalizedName+"' is already loading");
+        }
+        currentlyLoading[normalizedName] = true;
+        var req = new XMLHttpRequest();
+        req.open('GET', normalizedName+".js", true);
+        // In Firefox, a JavaScript MIME type means that the script is immediately eval-ed
+        req.overrideMimeType("text/plain");
+        req.onreadystatechange = function(event) {
+            if (req.readyState === 4 /* complete */) {
+                evaluateRawModuleSource(normalizedName, req.responseText, function (result) {
+                    delete currentlyLoading[normalizedName];
+                    moduleCache[normalizedName] = result;
+                    callback(result);
+                });
+            }
+        }
+        req.send();
+    }
+    
+    function evaluateRawModuleSource(normalizedModuleName, bodySource, callback) {
+        var body = eval("(function (require,exports,module) {"+bodySource+"})");
+        runEvaluatedModule(normalizedModuleName, body, bodySource, callback);
+    }
+
+    /**
+     * @param body has the signature function(require,exports,module)
+     * @param bodySource is only needed to extract and pre-cache the required modules
+     * @param callback is optional
+     */
+    function runEvaluatedModule(normalizedModuleName, body, bodySource, callback) {
+        var importNames = e._extractImportNames(bodySource);
+        var normalizedNames = resolveImportNames(normalizedModuleName, importNames);
         loadModules(normalizedNames, function(modules) {
             var moduleDict = e._zipToObject(importNames, modules);
-            runEvaluatedBody(moduleBody, moduleDict, callback);
+            runEvaluatedBody(body, moduleDict, callback);
         });
+    }
+    
+    /**
+     * @param moduleBody has the signature function(require,exports,module)
+     * @param callback is optional
+     */
+    function runEvaluatedBody(moduleBody, moduleDict, callback) {
+        var module = {
+            require: function (importName) {
+                return moduleDict[importName];
+            },
+            exports: {}
+        };
+        moduleBody(module.require, module.exports, module);
+        if (callback) {
+            callback(module.exports);
+        }
     }
     
     // Match quoted text non-greedily (as little as possibly)
@@ -108,20 +153,6 @@ var lobrow = function() {
         return importNames;
     }
     
-    /**
-     * moduleBody: (function (require, exports, module) {})
-     */
-    function runEvaluatedBody(moduleBody, moduleDict, callback) {
-        var module = {
-            require: function (importName) {
-                return moduleDict[importName];
-            },
-            exports: {}
-        };
-        moduleBody(module.require, module.exports, module);
-        callback(module.exports);
-    }
-    
     //----------------- Normalize module names
 
     /**
@@ -131,7 +162,7 @@ var lobrow = function() {
      */
     e.globalNames = {};
 
-    function normalizeImportNames(baseName, importNames) {
+    function resolveImportNames(baseName, importNames) {
         return importNames.map(function (importName) {
             return e._resolveImportName(baseName, importName);
         });

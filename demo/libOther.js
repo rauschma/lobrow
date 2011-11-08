@@ -1,3 +1,3 @@
-exports.otherHello = function () {
-    alert("Other Hello!");
+exports.otherHello = function (msg) {
+    console.log("Other Hello: "+msg);
 };

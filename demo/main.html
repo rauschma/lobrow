@@ -6,11 +6,14 @@
         <script src="../lobrow.js"></script>
         <script>
             window.onload = function () {
-                lobrow.main(
-                    ["./lib"],
+                lobrow.require(["./lib"],
                     function (lib) {
-                        lib.hello();
-                });
+                        lib.hello("Test");
+                    });
+                // lobrow.module(function (require, exports, module) {
+                //     var lib = require("./lib");
+                //     lib.hello("Test");
+                // });
             }
         </script>
     </head>
