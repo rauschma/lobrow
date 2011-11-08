@@ -1,0 +1,93 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+  "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+  <title>Unit tests for lobrow.js</title>
+
+  <link rel="shortcut icon" type="image/png" href="/Users/rauschma/local/jasmine/images/jasmine_favicon.png">
+
+  <link href="/Users/rauschma/local/jasmine/lib/jasmine-core/jasmine.css" rel="stylesheet"/>
+  
+  <!-- Jasmine files -->
+  <script type="text/javascript" src="/Users/rauschma/local/jasmine/lib/jasmine-core/jasmine.js"></script>
+  <script type="text/javascript" src="/Users/rauschma/local/jasmine/src/html/TrivialReporter.js"></script>
+  
+  <!-- The code to be tested and the tests -->
+  <script type="text/javascript" src="lobrow.js"></script>
+  <script type="text/javascript">
+        // TODO: _REQUIRE_REGEX
+  
+        describe('_isLegalNormalizedName', function () {
+            it('correctly recognizes legal names', function () {
+                expect(lobrow._isLegalNormalizedName("foo")).toBeTruthy();
+                expect(lobrow._isLegalNormalizedName("../foo")).toBeTruthy();
+            });
+            it('rejects illegal names', function () {
+                expect(lobrow._isLegalNormalizedName("./foo")).toBeFalsy();
+                expect(lobrow._isLegalNormalizedName("foo/")).toBeFalsy();
+            });
+        });
+        describe('_resolveImportName', function () {
+            it("handles the start file properly", function() {
+                expect(lobrow._resolveImportName(lobrow._START_FILE, "./foo")).toBe("foo");
+                expect(lobrow._resolveImportName(lobrow._START_FILE, "../foo")).toBe("../foo");
+            });
+            it('normalizes correctly', function () {
+                expect(lobrow._resolveImportName("baz", "./foo/bar")).toBe("foo/bar");
+                expect(lobrow._resolveImportName("foo", "./bar")).toBe("bar");
+                expect(lobrow._resolveImportName("foo/bar", "./baz/bla")).toBe("foo/baz/bla");
+                expect(lobrow._resolveImportName("foo/bar", "../baz/bla")).toBe("baz/bla");
+                expect(lobrow._resolveImportName("../foo", "./bar")).toBe("../bar");
+            });
+        });
+        describe('_goToParentDir', function () {
+            it('', function () {
+                expect(lobrow._goToParentDir("..")).toBe("../..");
+                expect(lobrow._goToParentDir("")).toBe("..");
+                expect(lobrow._goToParentDir("foo")).toBe("");
+                expect(lobrow._goToParentDir("foo/bar")).toBe("foo");
+            });
+        });
+        describe('_descend', function () {
+            it('', function () {
+                expect(lobrow._descend("..", "foo/bar")).toBe("../foo/bar");
+                expect(lobrow._descend("", "foo/bar")).toBe("foo/bar");
+                expect(lobrow._descend("baz", "foo/bar")).toBe("baz/foo/bar");
+            });
+        });
+  </script>
+
+  <script type="text/javascript">
+    (function() {
+      var jasmineEnv = jasmine.getEnv();
+      jasmineEnv.updateInterval = 1000;
+
+      var trivialReporter = new jasmine.TrivialReporter();
+
+      jasmineEnv.addReporter(trivialReporter);
+
+      jasmineEnv.specFilter = function(spec) {
+        return trivialReporter.specFilter(spec);
+      };
+
+      var currentWindowOnload = window.onload;
+
+      window.onload = function() {
+        if (currentWindowOnload) {
+          currentWindowOnload();
+        }
+        execJasmine();
+      };
+
+      function execJasmine() {
+        jasmineEnv.execute();
+      }
+
+    })();
+  </script>
+
+</head>
+
+<body>
+</body>
+</html>
