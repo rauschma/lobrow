@@ -1,6 +1,3 @@
-// TODO: prevent cycles
-// TODO: better regex
-
 /**
  * Normalized name (extension ".js" is cut off)
  * - "../foo" = file foo in the directory above the current directory
@@ -18,12 +15,12 @@ var lobrow = function() {
     
     //----------------- Internal constants
         
-    e._REQUIRE_REGEX = /require\("([^"]*)"\)/g;
     /**
      * The file where everything starts.
-     * Important: siblings must be correctly resolved
+     * Important: siblings must be correctly resolved. Example:
+     * "./foo" resolved against e._START_FILE must become "foo"
      */
-    e._START_FILE = "__START__";
+    e._START_FILE = "__START__"; // pseudo-name
     e._CURRENT_DIRECTORY = "";
 
     //----------------- Public interface
@@ -39,35 +36,46 @@ var lobrow = function() {
     //----------------- Loading
 
     var moduleCache = {};
+    var currentlyLoading = {};
     
     /**
      * @param callback has the signature function(moduleArray)
+     * @return an array with the values of the modules named in `normalizedNames`
      */
     function loadModules(normalizedNames, callback) {
         if (normalizedNames.length === 0) {
+            // Nothing to load, call back immediately
             callback([]);
         }
         var moduleCount = 0;
         var modules = [];
-        normalizedNames.forEach(function (name, i) {
-            if (moduleCache.hasOwnProperty(name)) {
-                storeModule(i, name, moduleCache[name]);
+        normalizedNames.forEach(function (normalizedName, i) {
+            if (moduleCache.hasOwnProperty(normalizedName)) {
+                storeModule(i, normalizedName, moduleCache[normalizedName]);
             } else {
-                var req = new XMLHttpRequest();
-                req.open('GET', name+".js", true);
-                // In Firefox, a JavaScript MIME type means that the script is immediately eval-ed
-                req.overrideMimeType("text/plain");
-                req.onreadystatechange = function(event) {
-                    if (req.readyState === 4 /* complete */) {
-                        transform(name, req.responseText, function (result) {
-                            moduleCache[name] = result;
-                            storeModule(i, result);
-                        });
-                    }
-                }
-                req.send();
+                loadRemotely(i, normalizedName);
             }
         });
+        function loadRemotely(index, normalizedName) {
+            if (currentlyLoading[normalizedName]) {
+                throw new Error("Cycle: module '"+normalizedName+"' is already loading");
+            }
+            currentlyLoading[normalizedName] = true;
+            var req = new XMLHttpRequest();
+            req.open('GET', normalizedName+".js", true);
+            // In Firefox, a JavaScript MIME type means that the script is immediately eval-ed
+            req.overrideMimeType("text/plain");
+            req.onreadystatechange = function(event) {
+                if (req.readyState === 4 /* complete */) {
+                    evaluateModule(normalizedName, req.responseText, function (result) {
+                        delete currentlyLoading[normalizedName];
+                        moduleCache[normalizedName] = result;
+                        storeModule(index, result);
+                    });
+                }
+            }
+            req.send();
+        }
         function storeModule(index, value) {
             modules[index] = value;
             moduleCount++;
@@ -77,35 +85,36 @@ var lobrow = function() {
         }
     }
     
-    function transform(moduleName, source, callback) {
+    function evaluateModule(normalizedModuleName, source, callback) {
+        var importNames = e._extractImportNames(source);
+        // Wrap a function around the bare body, so that we can invoke it
+        // Parens are necessary, so it won't be mistaken for a statement
+        var moduleBody = eval("(function (require,exports,module) {"+source+"})");
+        var normalizedNames = normalizeImportNames(normalizedModuleName, importNames);
+        loadModules(normalizedNames, function(modules) {
+            var moduleDict = e._zipToObject(importNames, modules);
+            runEvaluatedBody(moduleBody, moduleDict, callback);
+        });
+    }
+    
+    // Match quoted text non-greedily (as little as possibly)
+    var REQUIRE_REGEX = /require\s*\(\s*(["'])(.*?)\1\s*\)/g;
+    e._extractImportNames = function (source) {
         var importNames = [];
         var match;
-        while(match = e._REQUIRE_REGEX.exec(source)) {
-            importNames.push(match[1]);
+        while(match = REQUIRE_REGEX.exec(source)) {
+            importNames.push(match[2]);
         }
-        var moduleBody = eval("(function (require,exports,module) {"+source+"})");
-        if (importNames.length > 0) {
-            var normalizedNames = normalizeImportNames(moduleName, importNames);
-            loadModules(normalizedNames, function(modules) {
-                var moduleDict = e._zipToObject(importNames, modules);
-                // Parens are necessary, so it won't be mistaken for a statement
-                runModule(moduleBody, moduleDict, callback);
-            });
-        } else {
-            runModule(moduleBody, {}, callback);
-        }
+        return importNames;
     }
     
     /**
      * moduleBody: (function (require, exports, module) {})
      */
-    function runModule(moduleBody, moduleDict, callback) {
-        function require(localModuleName) {
-            return moduleDict[localModuleName];
-        }
+    function runEvaluatedBody(moduleBody, moduleDict, callback) {
         var module = {
-            require: function (localModuleName) {
-                return moduleDict[localModuleName];
+            require: function (importName) {
+                return moduleDict[importName];
             },
             exports: {}
         };

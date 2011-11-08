@@ -4,55 +4,65 @@
 <head>
   <title>Unit tests for lobrow.js</title>
 
-  <link rel="shortcut icon" type="image/png" href="/Users/rauschma/local/jasmine/images/jasmine_favicon.png">
+  <link rel="shortcut icon" type="image/png" href="../jasmine/images/jasmine_favicon.png">
 
-  <link href="/Users/rauschma/local/jasmine/lib/jasmine-core/jasmine.css" rel="stylesheet"/>
+  <link href="../jasmine/lib/jasmine-core/jasmine.css" rel="stylesheet"/>
   
   <!-- Jasmine files -->
-  <script type="text/javascript" src="/Users/rauschma/local/jasmine/lib/jasmine-core/jasmine.js"></script>
-  <script type="text/javascript" src="/Users/rauschma/local/jasmine/src/html/TrivialReporter.js"></script>
+  <script type="text/javascript" src="../jasmine/lib/jasmine-core/jasmine.js"></script>
+  <script type="text/javascript" src="../jasmine/src/html/TrivialReporter.js"></script>
   
   <!-- The code to be tested and the tests -->
   <script type="text/javascript" src="lobrow.js"></script>
   <script type="text/javascript">
-        // TODO: _REQUIRE_REGEX
+        var e = lobrow;
+  
+        describe('_extractImportNames', function () {
+            it('extracts correctly', function () {
+                expect(e._extractImportNames("")).toEqual([]);
+                expect(e._extractImportNames('   require("foo") \n require ( "bar" ) ')).toEqual(["foo", "bar"]);
+                expect(e._extractImportNames("   require('foo') \n require ( 'bar' ) ")).toEqual(["foo", "bar"]);
+            });
+        });
   
         describe('_isLegalNormalizedName', function () {
             it('correctly recognizes legal names', function () {
-                expect(lobrow._isLegalNormalizedName("foo")).toBeTruthy();
-                expect(lobrow._isLegalNormalizedName("../foo")).toBeTruthy();
+                expect(e._isLegalNormalizedName("foo")).toBeTruthy();
+                expect(e._isLegalNormalizedName("../foo")).toBeTruthy();
             });
             it('rejects illegal names', function () {
-                expect(lobrow._isLegalNormalizedName("./foo")).toBeFalsy();
-                expect(lobrow._isLegalNormalizedName("foo/")).toBeFalsy();
+                expect(e._isLegalNormalizedName("./foo")).toBeFalsy();
+                expect(e._isLegalNormalizedName("foo/")).toBeFalsy();
             });
         });
         describe('_resolveImportName', function () {
             it("handles the start file properly", function() {
-                expect(lobrow._resolveImportName(lobrow._START_FILE, "./foo")).toBe("foo");
-                expect(lobrow._resolveImportName(lobrow._START_FILE, "../foo")).toBe("../foo");
+                expect(e._resolveImportName(e._START_FILE, "./foo")).toBe("foo");
+                expect(e._resolveImportName(e._START_FILE, "../foo")).toBe("../foo");
             });
             it('normalizes correctly', function () {
-                expect(lobrow._resolveImportName("baz", "./foo/bar")).toBe("foo/bar");
-                expect(lobrow._resolveImportName("foo", "./bar")).toBe("bar");
-                expect(lobrow._resolveImportName("foo/bar", "./baz/bla")).toBe("foo/baz/bla");
-                expect(lobrow._resolveImportName("foo/bar", "../baz/bla")).toBe("baz/bla");
-                expect(lobrow._resolveImportName("../foo", "./bar")).toBe("../bar");
+                expect(e._resolveImportName("baz", "./foo/bar")).toBe("foo/bar");
+                expect(e._resolveImportName("foo", "./bar")).toBe("bar");
+                expect(e._resolveImportName("foo/bar", "./baz/bla")).toBe("foo/baz/bla");
+                expect(e._resolveImportName("foo/bar", "../baz/bla")).toBe("baz/bla");
+                expect(e._resolveImportName("../foo", "./bar")).toBe("../bar");
             });
         });
+        
         describe('_goToParentDir', function () {
             it('', function () {
-                expect(lobrow._goToParentDir("..")).toBe("../..");
-                expect(lobrow._goToParentDir("")).toBe("..");
-                expect(lobrow._goToParentDir("foo")).toBe("");
-                expect(lobrow._goToParentDir("foo/bar")).toBe("foo");
+                expect(e._goToParentDir(e._START_FILE)).toBe(e._CURRENT_DIRECTORY);
+                expect(e._goToParentDir("..")).toBe("../..");
+                expect(e._goToParentDir("")).toBe("..");
+                expect(e._goToParentDir("foo")).toBe("");
+                expect(e._goToParentDir("foo/bar")).toBe("foo");
             });
         });
         describe('_descend', function () {
             it('', function () {
-                expect(lobrow._descend("..", "foo/bar")).toBe("../foo/bar");
-                expect(lobrow._descend("", "foo/bar")).toBe("foo/bar");
-                expect(lobrow._descend("baz", "foo/bar")).toBe("baz/foo/bar");
+                expect(e._descend("..", "foo/bar")).toBe("../foo/bar");
+                expect(e._descend("", "foo/bar")).toBe("foo/bar");
+                expect(e._descend("baz", "foo/bar")).toBe("baz/foo/bar");
             });
         });
   </script>
