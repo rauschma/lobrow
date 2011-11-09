@@ -5,14 +5,11 @@
         <title>lobrow demo</title>
         <script src="../lobrow.js"></script>
         <script>
-            // TODO: lobrow.onload()
-            window.onload = function () {
-                lobrow.require(["./strset"],
-                    function (strset) {
-                        var elem = document.getElementById("result");
-                        elem.innerHTML = new strset.StringSet("red", "green", "blue").toString();
-                    });
-            }
+            lobrow.onload(["./strset"],
+                function (strset) {
+                    var elem = document.getElementById("result");
+                    elem.innerHTML = new strset.StringSet("red", "green", "blue").toString();
+                });
         </script>
     </head>
     <body>

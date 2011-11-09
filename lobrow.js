@@ -31,13 +31,39 @@ var lobrow = function() {
      * @param body is optional – has the signature function(module1, module2, ...)
      */
     e.require = function (importNames, body) {
-        loadModules(resolveImportNames(e._START_FILE, importNames), function (modules) {
-            if (body) {
-                body.apply(null, modules);
+        loadModules(resolveImportNames(e._START_FILE, importNames),
+            function (modules) {
+                if (body) {
+                    body.apply(null, modules);
+                }
             }
-        });
+        );
     };
     /**
+     * Waits for window.onload in addition to the loaded modules.
+     * @param body is optional – has the signature function(module1, module2, ...)
+     */
+    e.onload = function (importNames, body) {
+        var oldOnload = window.onload;
+        var countDown = loadModules(resolveImportNames(e._START_FILE, importNames),
+            function (modules) {
+                if (body) {
+                    body.apply(null, modules);
+                }
+                if (oldOnload) {
+                    oldOnload();
+                }
+            },
+            1 // prevents firing before we do the final decrement
+        );
+        window.onload = function () {
+            countDown.dec();
+        }
+    };
+    /**
+     * This method only works if the browser keeps a function’s source code
+     * (minified or not)
+     *
      * @param body has the signature function(require, exports, module)
      */
     e.module = function (body) {
@@ -54,29 +80,29 @@ var lobrow = function() {
     var currentlyLoading = {};
     
     /**
-     * @param callback optional – has the signature function(moduleArray)
-     * @return an array with the values of the modules named in `normalizedNames`
+     * @param callback optional – has the signature function(moduleArray).
+     *        Receives an array with the values of the modules identified via `normalizedNames`
+     * @param countDownIncrement default is 0
      */
-    function loadModules(normalizedNames, callback) {
-        if (normalizedNames.length === 0) {
-            // Nothing to load, call back immediately
-            if (callback) {
-                callback([]);
-            }
-            return;
-        }
-        var moduleCount = 0;
+    function loadModules(normalizedNames, callback, countDownIncrement) {
+        var countDownIncrement = (countDownIncrement === undefined ? 0 : countDownIncrement);
         var modules = [];
+        function finalAction() {
+            if (callback) {
+                callback(modules);
+            }
+        }
+        var countDown = new CountDown(normalizedNames.length + countDownIncrement, finalAction);
+        
         normalizedNames.forEach(function (normalizedName, i) {
             // The callbacks can be called in any order (fork-join-style)!
             loadModule(normalizedName, function (value) {
                 modules[i] = value;
-                moduleCount++;
-                if (moduleCount >= normalizedNames.length && callback) {
-                    callback(modules);
-                }
+                countDown.dec();
             });
         });
+        
+        return countDown;
     }
     
     /**
@@ -265,7 +291,7 @@ var lobrow = function() {
         return !endsWith(name, "/") && !startsWith(name, "./");
     };
     
-    //----------------- Helpers
+    //----------------- Generic helpers
     
     e._zipToObject = function (keys, values) {
         if (keys.length !== values.length) {
@@ -294,6 +320,22 @@ var lobrow = function() {
         var index = str.lastIndexOf(suffix);
         return index >= 0 && index === str.length - suffix.length;
     }
+
+    function CountDown(counter, finalAction) {
+        this.counter = counter;
+        this.finalAction = finalAction;
+        // Important! finalAction must always be executed
+        this.maybeFire();
+    }
+    CountDown.prototype.maybeFire = function () {
+        if (this.counter <= 0 && this.finalAction) {
+            this.finalAction();
+        }
+    };
+    CountDown.prototype.dec = function () {
+        this.counter--;
+        this.maybeFire();
+    };
 
     //----------------- Done
     return e;
