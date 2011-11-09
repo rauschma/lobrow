@@ -10,6 +10,8 @@
  * - "../foo" look for "foo" in the directory above the current file
  */
 var lobrow = function() {
+    "use strict";
+    
     // A function whose name starts with an underscore is exported for unit tests only
     var e = {};
 
@@ -90,20 +92,30 @@ var lobrow = function() {
             throw new Error("Cycle: module '"+normalizedName+"' is already loading");
         }
         currentlyLoading[normalizedName] = true;
-        var req = new XMLHttpRequest();
-        req.open('GET', normalizedName+".js", true);
-        // In Firefox, a JavaScript MIME type means that the script is immediately eval-ed
-        req.overrideMimeType("text/plain");
-        req.onreadystatechange = function(event) {
-            if (req.readyState === 4 /* complete */) {
-                evaluateRawModuleSource(normalizedName, req.responseText, function (result) {
-                    delete currentlyLoading[normalizedName];
-                    moduleCache[normalizedName] = result;
-                    callback(result);
-                });
+        var fileName = normalizedName+".js";
+        try {
+            var req = new XMLHttpRequest();
+            req.open('GET', fileName, true);
+            // In Firefox, a JavaScript MIME type means that the script is immediately eval-ed
+            req.overrideMimeType("text/plain");
+            req.onreadystatechange = function(event) {
+                if (req.readyState === 4 /* complete */) {
+                    evaluateRawModuleSource(normalizedName, req.responseText, function (result) {
+                        delete currentlyLoading[normalizedName];
+                        moduleCache[normalizedName] = result;
+                        callback(result);
+                    });
+                }
             }
+            req.send();
+        } catch (e) {
+            throw new Error("Could not load: "+fileName
+                + ". Possible reasons:\n"
+                + "- file does not exist\n"
+                + "- Firefox prevents XHR in directories above the current one\n"
+                + "- Chrome blocks XHR for local files"
+            );
         }
-        req.send();
     }
     
     function evaluateRawModuleSource(normalizedModuleName, bodySource, callback) {
