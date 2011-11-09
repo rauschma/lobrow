@@ -1,7 +1,6 @@
 /**
  * Normalized name (extension ".js" is cut off)
  * - "../foo" = file foo in the directory above the current directory
- * - "" = current file
  * - "foo" = a sibling of the current file
  * - "bar/foo" = descend into bar to get to file foo
  *
@@ -19,8 +18,9 @@ var lobrow = function(global) {
         
     /**
      * The file where everything starts.
-     * Important: siblings must be correctly resolved. Example:
-     * "./foo" resolved against e._START_FILE must become "foo"
+     * Never used directly, only to resolve import names.
+     * Example – correctly resolve a reference to a sibling:
+     * "./foo" resolved against e._START_FILE must become "foo".
      */
     e._START_FILE = "__START__"; // pseudo-name
     e._CURRENT_DIRECTORY = "";
@@ -136,9 +136,9 @@ var lobrow = function(global) {
         } catch (e) {
             throw new Error("Could not load: "+fileName
                 + ". Possible reasons:\n"
-                + "- file does not exist\n"
-                + "- Firefox prevents XHR in directories above the current one\n"
-                + "- Chrome blocks XHR for local files"
+                + "- File does not exist\n"
+                + "- Firefox blocks XHR for local files above the current directory\n"
+                + "- Chrome blocks XHR for local files (use command line option --allow-file-access-from-files)"
             );
         }
     }
@@ -287,7 +287,7 @@ var lobrow = function(global) {
         // Can be absolute
         // Can be relative: "../foo" or "bar", but not "./bar"
         // Must be a JS file after appending ".js"
-        return !endsWith(name, "/") && !startsWith(name, "./");
+        return !endsWith(name, "/") && !endsWith(name, ".js") && !startsWith(name, "./");
     };
     
     //----------------- Generic helpers

@@ -28,9 +28,12 @@
         describe('_isLegalNormalizedName', function () {
             it('correctly recognizes legal names', function () {
                 expect(e._isLegalNormalizedName("foo")).toBeTruthy();
+                expect(e._isLegalNormalizedName("foo/bar")).toBeTruthy();
                 expect(e._isLegalNormalizedName("../foo")).toBeTruthy();
+                expect(e._isLegalNormalizedName("../foo/bar")).toBeTruthy();
             });
             it('rejects illegal names', function () {
+                expect(e._isLegalNormalizedName("foo.js")).toBeFalsy();
                 expect(e._isLegalNormalizedName("./foo")).toBeFalsy();
                 expect(e._isLegalNormalizedName("foo/")).toBeFalsy();
             });
