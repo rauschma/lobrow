@@ -1,0 +1,5 @@
+lobrow allows one to load Node.js modules in a web browser.
+
+- Details: http://www.2ality.com/2011/11/lobrow.html
+- Demo: see directory demo/
+
