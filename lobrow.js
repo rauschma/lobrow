@@ -9,7 +9,7 @@
  * - "./foo" look for a sibling of the current file
  * - "../foo" look for "foo" in the directory above the current file
  */
-var lobrow = function() {
+var lobrow = function(global) {
     "use strict";
     
     // A function whose name starts with an underscore is exported for unit tests only
@@ -61,10 +61,9 @@ var lobrow = function() {
         }
     };
     /**
-     * This method only works if the browser keeps a function’s source code
-     * (minified or not)
+     * Warning: Only works if the browser keeps a function’s source code (minified or not)!
      *
-     * @param body has the signature function(require, exports, module)
+     * @param body has the signature function(require, exports, module, global)
      */
     e.module = function (body) {
         var bodySource = body.toString();
@@ -145,7 +144,7 @@ var lobrow = function() {
     }
     
     function evaluateRawModuleSource(normalizedModuleName, bodySource, callback) {
-        var body = eval("(function (require,exports,module) {"+bodySource+"})");
+        var body = eval("(function (require,exports,module,global) {"+bodySource+"})");
         runEvaluatedModule(normalizedModuleName, body, bodySource, callback);
     }
 
@@ -174,7 +173,7 @@ var lobrow = function() {
             },
             exports: {}
         };
-        moduleBody(module.require, module.exports, module);
+        moduleBody(module.require, module.exports, module, global);
         if (callback) {
             callback(module.exports);
         }
@@ -339,4 +338,4 @@ var lobrow = function() {
 
     //----------------- Done
     return e;
-}();
+}(this); // hand in global object
